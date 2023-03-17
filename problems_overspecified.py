@@ -5,7 +5,7 @@ class TensorSensingProblem:
         self.m = m
         self.d = d
         self.r = r
-        r_star = r -2
+        r_star = r - 1
         self.r_star = r_star
         self.n = n
         self.nfact = np.math.factorial(self.n)
@@ -82,14 +82,17 @@ class TensorSensingProblem:
         def JacTJac_func(Y=X, reset=False):
             if reset:
                 self.reset_gram(X)
+            loss_func = self.loss()    
             Y = torch.reshape(Y, self.X_star.shape)
             # gram = X.T @ X
             YTX = Y.T @ X
+            # eta = loss_func(X)
+            eta = 1.0
             if self.n > 2:
-                return (self.n * (self.n - 1) * X @ (self.gramnm2 * YTX) + self.n * Y @ self.gramnm1 + np.sqrt(self.loss(Y)) * Y).view(-1)
+                return (self.n * (self.n - 1) * X @ (self.gramnm2 * YTX) + self.n * Y @ self.gramnm1 + eta * Y).view(-1)
                 # return (self.n * (self.n - 1) * X @ (torch.pow(gram, self.n - 2) * YTX) + self.n * Y @ torch.pow(gram, self.n - 1)).view(-1)
             elif self.n == 2:
-                return 2 * (X @ (YTX) + Y @ self.gram + np.sqrt(self.loss(Y)) * Y).view(-1)
+                return 2 * (X @ (YTX) + Y @ self.gram + eta * Y).view(-1)
             else:
                 raise ValueError("n must be at least 2")
         return JacTJac_func

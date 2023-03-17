@@ -96,4 +96,3 @@ class TensorSensingProblem:
         X = self.X_star + delta * G / torch.linalg.norm(G.view(-1))
         X = X.requires_grad_(True)
         return X
-
