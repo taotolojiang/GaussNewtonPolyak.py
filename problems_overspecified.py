@@ -5,13 +5,17 @@ class TensorSensingProblem:
         self.m = m
         self.d = d
         self.r = r
+        r_star = r -2
+        self.r_star = r_star
         self.n = n
         self.nfact = np.math.factorial(self.n)
         self.pfail = pfail
         self.A = torch.randn(m, d, dtype=torch.double)
-        self.X_star = torch.randn(d, r-2, dtype=torch.double)
+        self.X_star = torch.randn(d, r, dtype=torch.double)
         Q, _ = torch.linalg.qr(self.X_star)
-        self.X_star = Q @ torch.diag(torch.linspace(1, cond_num, r, dtype=torch.double))
+        sing_val = torch.linspace(1, cond_num, r_star, dtype=torch.double)
+        sing_val = torch.cat((sing_val, torch.zeros(r-r_star, dtype=torch.double)))
+        self.X_star = Q @ torch.diag(sing_val)
         self.X_star = self.X_star / torch.linalg.norm(self.X_star.view(-1))
         self.X_star = self.X_star / torch.linalg.matrix_norm(self.X_star, 2)
         self.fail = torch.bernoulli(torch.ones(m//2, dtype=torch.double) * pfail)
@@ -30,8 +34,10 @@ class TensorSensingProblem:
             return self.JacTJac_ScaledSM(X)
         elif method in ["gnp", "rgnp"]:
             return self.JacTJac_GNP(X)
+        elif method in ["dgnp", "rdgnp"]:
+            return self.JacTJac_dampedGNP(X)
         else:
-            raise ValueError("method must be one of Polyak, ScaledSM, or GNP")
+            raise ValueError("method must be one of Polyak, ScaledSM, GNP, or dGNP")
 
     def JacTJac_Polyak(self, X):
         def JacTJac_func(Y=X, reset=False):
@@ -68,6 +74,22 @@ class TensorSensingProblem:
                 # return (self.n * (self.n - 1) * X @ (torch.pow(gram, self.n - 2) * YTX) + self.n * Y @ torch.pow(gram, self.n - 1)).view(-1)
             elif self.n == 2:
                 return 2 * (X @ (YTX) + Y @ self.gram).view(-1)
+            else:
+                raise ValueError("n must be at least 2")
+        return JacTJac_func
+    
+    def JacTJac_dampedGNP(self, X):
+        def JacTJac_func(Y=X, reset=False):
+            if reset:
+                self.reset_gram(X)
+            Y = torch.reshape(Y, self.X_star.shape)
+            # gram = X.T @ X
+            YTX = Y.T @ X
+            if self.n > 2:
+                return (self.n * (self.n - 1) * X @ (self.gramnm2 * YTX) + self.n * Y @ self.gramnm1 + np.sqrt(self.loss(Y)) * Y).view(-1)
+                # return (self.n * (self.n - 1) * X @ (torch.pow(gram, self.n - 2) * YTX) + self.n * Y @ torch.pow(gram, self.n - 1)).view(-1)
+            elif self.n == 2:
+                return 2 * (X @ (YTX) + Y @ self.gram + np.sqrt(self.loss(Y)) * Y).view(-1)
             else:
                 raise ValueError("n must be at least 2")
         return JacTJac_func
